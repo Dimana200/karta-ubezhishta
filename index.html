@@ -167,7 +167,7 @@ main { position: relative; flex: 1; min-height: 0; }
   <div class="bar">
     <div class="brand">
       <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="3" fill="#EE7203"/><path d="M17 6 L29 27 H5 Z" fill="#1D4E9E"/></svg>
-      <div><h1 id="t-title">Карта на убежищата</h1><small id="t-sub">Европа · OpenStreetMap</small></div>
+      <div><h1 id="t-title">Карта на убежищата</h1><small id="t-sub">Европа · OpenStreetMap</small><small id="t-date"></small></div>
     </div>
     <div class="layers" role="group" aria-label="Слоеве">
       <button class="chip" id="l-shelter" aria-pressed="true"><span class="dot shelter"></span><span data-t="shelters">Убежища</span></button>
@@ -197,9 +197,9 @@ var T = {
     title: "Карта на убежищата", sub: "Европа · OpenStreetMap",
     shelters: "Убежища", metro: "Метро", bunkers: "Стари бункери",
     nearest: "Най-близо до мен", about: "Важно",
-    zoomIn: "Приближете картата, за да се заредят обектите",
-    loading: "Зареждане…", slow: "Данните се зареждат бавно, изчакайте още малко…", shown: "Показани обекти: ", none: "Няма отбелязани обекти тук",
-    loadErr: "Сървърът с данни не отговаря. Опитайте пак след малко.",
+    zoomIn: "Приближете картата до област или град, за да се покажат обектите",
+    loading: "Зареждане…", dataFrom: "Данни от", slow: "Данните се зареждат бавно, изчакайте още малко…", shown: "Показани обекти: ", none: "Няма отбелязани обекти тук",
+    loadErr: "Данните не се заредиха. Проверете интернета и опитайте пак.",
     cached: "Без връзка: показани са последно заредените данни",
     kShelter: "Убежище (според картата)", kMetro: "Метростанция · възможно укритие", kBunker: "Исторически бункер",
     unnamed: "Без име", fType: "Вид", fYear: "Година", fOp: "Стопанин", fAccess: "Достъп", fLevel: "Ниво",
@@ -208,7 +208,7 @@ var T = {
     wMetro: "Подземните станции често се използват за укритие, но не са официално убежище, докато властите не обявят това.",
     wAbandoned: "Обектът е отбелязан като изоставен или разрушен.",
     route: "Маршрут пеша", osm: "Виж в OpenStreetMap", fix: "Поправи / добави на картата",
-    nearTitle: "Най-близки места за укритие", nearNone: "В радиус 50 km няма отбелязани убежища или метро. Подходящи укрития са мазета и вътрешни помещения без прозорци.", searching: "Търсим убежища в радиус",
+    nearTitle: "Най-близки места за укритие", nearNone: "В радиус около 150 km няма отбелязани убежища или метро. Подходящи укрития са мазета и вътрешни помещения без прозорци.", searching: "Търсим най-близките убежища…",
     geoErr: "Не получихме местоположението. Разрешете локацията или преместете картата ръчно.",
     locating: "Търсим местоположението…",
     aboutTitle: "Как да ползвате картата",
@@ -223,8 +223,8 @@ var T = {
     shelters: "Schutzräume", metro: "U-Bahn", bunkers: "Alte Bunker",
     nearest: "In meiner Nähe", about: "Wichtig",
     zoomIn: "Karte vergrößern, um Orte zu laden",
-    loading: "Lädt…", slow: "Die Daten laden langsam, bitte noch etwas warten…", shown: "Angezeigte Orte: ", none: "Hier sind keine Orte eingetragen",
-    loadErr: "Der Datenserver antwortet nicht. Bitte gleich noch einmal versuchen.",
+    loading: "Lädt…", dataFrom: "Daten vom", slow: "Die Daten laden langsam, bitte noch etwas warten…", shown: "Angezeigte Orte: ", none: "Hier sind keine Orte eingetragen",
+    loadErr: "Daten konnten nicht geladen werden. Internet prüfen und erneut versuchen.",
     cached: "Offline: zuletzt geladene Daten werden angezeigt",
     kShelter: "Schutzraum (laut Karte)", kMetro: "U-Bahnhof · mögliche Zuflucht", kBunker: "Historischer Bunker",
     unnamed: "Ohne Namen", fType: "Art", fYear: "Jahr", fOp: "Betreiber", fAccess: "Zugang", fLevel: "Ebene",
@@ -233,7 +233,7 @@ var T = {
     wMetro: "Unterirdische Bahnhöfe dienen oft als Zuflucht, sind aber erst nach behördlicher Freigabe offizielle Schutzorte.",
     wAbandoned: "Als verlassen oder zerstört eingetragen.",
     route: "Fußweg", osm: "In OpenStreetMap ansehen", fix: "Korrigieren / eintragen",
-    nearTitle: "Nächste Zufluchtsorte", nearNone: "Im Umkreis von 50 km sind keine Schutzräume oder U-Bahnhöfe eingetragen. Geeignete Zuflucht bieten Keller und innenliegende Räume ohne Fenster.", searching: "Suche Schutzräume im Umkreis von",
+    nearTitle: "Nächste Zufluchtsorte", nearNone: "Im Umkreis von etwa 150 km sind keine Schutzräume oder U-Bahnhöfe eingetragen. Geeignete Zuflucht bieten Keller und innenliegende Räume ohne Fenster.", searching: "Suche die nächsten Schutzräume…",
     geoErr: "Kein Standort erhalten. Standortfreigabe erlauben oder Karte selbst verschieben.",
     locating: "Standort wird gesucht…",
     aboutTitle: "So nutzen Sie die Karte",
@@ -248,8 +248,8 @@ var T = {
     shelters: "Shelters", metro: "Metro", bunkers: "Old bunkers",
     nearest: "Nearest to me", about: "Important",
     zoomIn: "Zoom in to load places",
-    loading: "Loading…", slow: "Data is loading slowly, please wait a little longer…", shown: "Places shown: ", none: "No places mapped here",
-    loadErr: "The data server is not responding. Try again in a moment.",
+    loading: "Loading…", dataFrom: "Data from", slow: "Data is loading slowly, please wait a little longer…", shown: "Places shown: ", none: "No places mapped here",
+    loadErr: "Data could not be loaded. Check your connection and try again.",
     cached: "Offline: showing the last loaded data",
     kShelter: "Shelter (as mapped)", kMetro: "Metro station · possible refuge", kBunker: "Historic bunker",
     unnamed: "Unnamed", fType: "Type", fYear: "Year", fOp: "Operator", fAccess: "Access", fLevel: "Level",
@@ -258,7 +258,7 @@ var T = {
     wMetro: "Underground stations are often used for refuge, but they are not official shelters until the authorities say so.",
     wAbandoned: "Mapped as abandoned or ruined.",
     route: "Walking route", osm: "View in OpenStreetMap", fix: "Fix / add on the map",
-    nearTitle: "Nearest places to take cover", nearNone: "No shelters or metro stations are mapped within 50 km. Basements and inner rooms without windows are suitable places to take cover.", searching: "Searching for shelters within",
+    nearTitle: "Nearest places to take cover", nearNone: "No shelters or metro stations are mapped within about 150 km. Basements and inner rooms without windows are suitable places to take cover.", searching: "Searching for the nearest shelters…",
     geoErr: "Could not get your location. Allow location access or move the map yourself.",
     locating: "Finding your location…",
     aboutTitle: "How to use the map",
@@ -279,9 +279,9 @@ var BUNKER_TYPES = {
         technical: "technical", personnel_shelter: "personnel shelter", bomb_shelter: "bomb shelter", mg_nest: "machine-gun nest", hardened_aircraft_shelter: "aircraft shelter" }
 };
 
-var ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
-var MIN_ZOOM = 10;
-var HIDDEN_TYPES = { missile_silo: 1 };
+var DATA = "data/";
+var MIN_ZOOM = 8;          // below this, too many tiles for a phone
+var MAX_TILES = 40;
 
 var lang = "bg";
 try { lang = localStorage.getItem("ub-lang") || ""; } catch (e) { lang = ""; }
@@ -291,54 +291,10 @@ if (!T[lang]) {
 }
 function t(k) { return T[lang][k] || T.en[k] || k; }
 
-function classify(tags) {
-  var tg = tags || {};
-  if ((tg.railway === "station" && tg.station === "subway") || (tg.station === "subway" && tg.public_transport === "station")) return "metro";
-  if ((tg.amenity === "shelter" && tg.shelter_type === "bomb_shelter") || tg.bunker_type === "bomb_shelter" || tg.bunker_type === "personnel_shelter") return "shelter";
-  if (tg.military === "bunker" || tg.building === "bunker" || tg["disused:military"] === "bunker" || tg["abandoned:military"] === "bunker") {
-    if (HIDDEN_TYPES[tg.bunker_type]) return null;
-    return "bunker";
-  }
-  return null;
-}
-function isAbandoned(tg) {
-  if (tg.disused === "yes" || tg.abandoned === "yes" || tg.ruins === "yes" || tg.historic === "ruins") return true;
-  for (var k in tg) { if (/^(disused|abandoned|ruins|demolished):/.test(k)) return true; }
-  return false;
-}
-function buildQuery(b) {
-  var bb = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(function (v) { return v.toFixed(4); }).join(",");
-  return "[out:json][timeout:25];(" +
-    'nwr["amenity"="shelter"]["shelter_type"="bomb_shelter"](' + bb + ");" +
-    'nwr["bunker_type"~"^(bomb_shelter|personnel_shelter)$"](' + bb + ");" +
-    'nwr["military"="bunker"](' + bb + ");" +
-    'nwr["building"="bunker"](' + bb + ");" +
-    'nwr["disused:military"="bunker"](' + bb + ");" +
-    'nwr["railway"="station"]["station"="subway"](' + bb + ");" +
-    ");out center tags 4000;";
-}
-function nearQuery(lat, lon, r) {
-  var a = "(around:" + r + "," + lat.toFixed(5) + "," + lon.toFixed(5) + ")";
-  return "[out:json][timeout:25];(" +
-    'nwr["amenity"="shelter"]["shelter_type"="bomb_shelter"]' + a + ";" +
-    'nwr["bunker_type"~"^(bomb_shelter|personnel_shelter)$"]' + a + ";" +
-    'nwr["railway"="station"]["station"="subway"]' + a + ";" +
-    ");out center tags 300;";
-}
-function parse(json) {
-  var out = [], seen = {};
-  (json.elements || []).forEach(function (el) {
-    var lat = el.lat != null ? el.lat : el.center && el.center.lat;
-    var lon = el.lon != null ? el.lon : el.center && el.center.lon;
-    if (lat == null || lon == null) return;
-    var key = el.type + "/" + el.id;
-    if (seen[key]) return;
-    var kind = classify(el.tags);
-    if (!kind) return;
-    seen[key] = 1;
-    out.push({ id: key, lat: lat, lon: lon, kind: kind, tags: el.tags || {} });
-  });
-  return out;
+var KIND = { s: "shelter", m: "metro", b: "bunker" };
+function toPlace(r) {
+  return { id: r[9], lat: r[0], lon: r[1], kind: KIND[r[2]], ab: !!r[8],
+           tags: { name: r[3], bunker_type: r[4], start_date: r[5], operator: r[6], access: r[7] } };
 }
 function distKm(a, b, c, d) {
   var R = 6371, r = Math.PI / 180, x = (c - a) * r, y = (d - b) * r;
@@ -346,10 +302,11 @@ function distKm(a, b, c, d) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
-function nameOf(p) { var tg = p.tags; return tg["name:" + lang] || tg.name || tg["official_name"] || tg.ref || t("unnamed"); }
+function nameOf(p) { return p.tags.name || t("unnamed"); }
 
 var map, layers = {}, items = [], visible = { shelter: true, metro: true, bunker: true };
-var statusEl, sheet, sheetIn, timer = null, ctrl = null, inflight = null, inflightKey = "", lastKey = "", userPos = null, userMarker = null;
+var statusEl, sheet, sheetIn, timer = null, userPos = null, userMarker = null;
+var index = null, indexP = null, tiles = {}, tileP = {};
 
 function setStatus(msg, err) {
   statusEl.textContent = msg; statusEl.className = "status" + (err ? " err" : ""); statusEl.hidden = !msg;
@@ -371,53 +328,50 @@ function render() {
   setStatus(n ? t("shown") + n : t("none"));
 }
 
-function save(key, list) {
-  try { localStorage.setItem("ub-cache", JSON.stringify({ key: key, items: list.slice(0, 4000) })); } catch (e) { /* storage unavailable */ }
-}
-function loadCache() {
-  try { var c = JSON.parse(localStorage.getItem("ub-cache") || "null"); return c && c.items ? c.items : null; } catch (e) { return null; }
-}
-
-function fetchOverpass(q, i, c) {
-  var own = new AbortController();
-  var tm = setTimeout(function () { own.abort(); }, 40000);   // one slow server: try the next one
-  var onAbort = function () { own.abort(); };
-  c.signal.addEventListener("abort", onAbort);
-  return fetch(ENDPOINTS[i], { method: "POST", body: "data=" + encodeURIComponent(q),
-    headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: own.signal })
+function getIndex() {
+  if (!indexP) indexP = fetch(DATA + "index.json", { cache: "no-cache" })
     .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
-    .catch(function (e) {
-      if (c.signal.aborted || i + 1 >= ENDPOINTS.length) throw e;
-      return fetchOverpass(q, i + 1, c);
-    })
-    .finally(function () { clearTimeout(tm); c.signal.removeEventListener("abort", onAbort); });
+    .then(function (j) { index = j; showDate(); return j; })
+    .catch(function (e) { indexP = null; throw e; });
+  return indexP;
 }
-function load(force) {
+function getTile(key) {
+  if (tiles[key]) return Promise.resolve(tiles[key]);
+  if (!index.tiles[key]) return Promise.resolve([]);
+  if (!tileP[key]) tileP[key] = fetch(DATA + "tiles/" + key + ".json")
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .then(function (rows) { tiles[key] = rows.map(toPlace); return tiles[key]; })
+    .catch(function (e) { delete tileP[key]; throw e; });
+  return tileP[key];
+}
+function showDate() {
+  var el = document.getElementById("t-date");
+  if (index && index.generated) el.textContent = t("dataFrom") + " " + index.generated.split("-").reverse().join(".");
+}
+function tileKeys(s, w, n, e) {
+  var out = [];
+  for (var y = Math.floor(s); y <= Math.floor(n); y++)
+    for (var x = Math.floor(w); x <= Math.floor(e); x++) out.push(y + "_" + x);
+  return out;
+}
+function loadTiles(keys) {
+  return getIndex().then(function () {
+    return Promise.all(keys.map(getTile));
+  }).then(function (lists) { return [].concat.apply([], lists); });
+}
+function load() {
   if (!map) return Promise.resolve();
   if (map.getZoom() < MIN_ZOOM) { setStatus(t("zoomIn")); return Promise.resolve(); }
-  var b = map.getBounds().pad(0.25);
-  var key = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(function (v) { return v.toFixed(2); }).join(",");
-  if (inflight && key === inflightKey) return inflight;   // same area already loading: wait for it
-  if (!force && key === lastKey) return Promise.resolve();
-  if (ctrl) ctrl.abort();
-  ctrl = new AbortController();
-  var myCtrl = ctrl, slow = setTimeout(function () { setStatus(t("slow")); }, 6000);
+  var b = map.getBounds().pad(0.2);
+  var keys = tileKeys(b.getSouth(), b.getWest(), b.getNorth(), b.getEast());
+  if (keys.length > MAX_TILES) { setStatus(t("zoomIn")); return Promise.resolve(); }
   setStatus(t("loading"));
-  inflightKey = key;
-  inflight = fetchOverpass(buildQuery(b), 0, myCtrl).then(function (json) {
-    lastKey = key; items = parse(json); save(key, items); render();
-  }).catch(function (e) {
-    if (myCtrl.signal.aborted) return;
-    var c = loadCache();
-    if (c && c.length) { items = c; render(); setStatus(t("cached"), true); }
-    else setStatus(t("loadErr"), true);
-  }).then(function () {
-    clearTimeout(slow);
-    if (ctrl === myCtrl) { inflight = null; inflightKey = ""; }
-  });
-  return inflight;
+  return loadTiles(keys).then(function (list) {
+    items = list.filter(function (p) { return b.contains([p.lat, p.lon]); });
+    render();
+  }).catch(function () { setStatus(t("loadErr"), true); });
 }
-function scheduleLoad() { clearTimeout(timer); timer = setTimeout(load, 450); }
+function scheduleLoad() { clearTimeout(timer); timer = setTimeout(load, 250); }
 
 function link(href, label, primary) {
   return '<a href="' + esc(href) + '" target="_blank" rel="noopener"' + (primary ? ' class="primary"' : "") + ">" + esc(label) + "</a>";
@@ -434,7 +388,7 @@ function showPlace(p) {
   if (tg.access) rows.push([t("fAccess"), tg.access]);
   if (tg.level || tg.layer) rows.push([t("fLevel"), tg.level || tg.layer]);
   var warn = p.kind === "bunker" ? t("wBunker") : p.kind === "metro" ? t("wMetro") : t("wShelter");
-  if (isAbandoned(tg)) warn = t("wAbandoned") + " " + warn;
+  if (p.ab) warn = t("wAbandoned") + " " + warn;
   var dist = userPos ? " · " + distKm(userPos[0], userPos[1], p.lat, p.lon).toFixed(1) + " km" : "";
   var html = '<div class="sheet-head"><div style="flex:1;min-width:0;display:grid;gap:6px">' +
     '<div class="kind"><span class="dot ' + p.kind + '"></span>' + esc(kindLabel) + esc(dist) + "</div>" +
@@ -468,22 +422,19 @@ function showNearest(cand) {
     });
   });
 }
-var NEAR_RADII = [3000, 15000, 50000];
-function searchNear(step) {
-  var r = NEAR_RADII[step];
-  setStatus(t("searching") + " " + (r / 1000) + " km…");
-  var c = new AbortController();
-  return fetchOverpass(nearQuery(userPos[0], userPos[1], r), 0, c).then(function (json) {
-    var found = parse(json).filter(function (p) { return p.kind !== "bunker"; });
-    if (!found.length && step + 1 < NEAR_RADII.length) return searchNear(step + 1);
-    return found;
-  });
+function nearestFrom(list) {
+  return list.filter(function (p) { return p.kind !== "bunker"; })
+    .map(function (p) { return { p: p, d: distKm(userPos[0], userPos[1], p.lat, p.lon) }; })
+    .sort(function (a, b) { return a.d - b.d; }).slice(0, 6);
 }
-function mergeItems(list) {
-  var have = {};
-  items.forEach(function (p) { have[p.id] = 1; });
-  list.forEach(function (p) { if (!have[p.id]) { items.push(p); have[p.id] = 1; } });
-  render();
+function searchNear(ring) {
+  var la = Math.floor(userPos[0]), lo = Math.floor(userPos[1]);
+  setStatus(t("searching"));
+  return loadTiles(tileKeys(la - ring, lo - ring, la + ring, lo + ring)).then(function (list) {
+    var near = nearestFrom(list);
+    if ((!near.length || near[0].d > 60) && ring < 2) return searchNear(ring + 1);
+    return near;
+  });
 }
 function locate() {
   if (!navigator.geolocation) { setStatus(t("geoErr"), true); return; }
@@ -492,10 +443,7 @@ function locate() {
     userPos = [pos.coords.latitude, pos.coords.longitude];
     if (userMarker) map.removeLayer(userMarker);
     userMarker = L.circleMarker(userPos, { radius: 9, color: "#ffffff", weight: 3, fillColor: css("--cd-orange"), fillOpacity: 1 }).addTo(map);
-    searchNear(0).then(function (found) {
-      mergeItems(found);
-      var near = found.map(function (p) { return { p: p, d: distKm(userPos[0], userPos[1], p.lat, p.lon) }; })
-        .sort(function (a, b) { return a.d - b.d; }).slice(0, 6);
+    searchNear(0).then(function (near) {
       if (near.length) {
         var bb = L.latLngBounds([userPos]);
         near.slice(0, 3).forEach(function (n) { bb.extend([n.p.lat, n.p.lon]); });
@@ -519,6 +467,7 @@ function applyLang() {
   document.title = t("title");
   document.getElementById("t-title").textContent = t("title");
   document.getElementById("t-sub").textContent = t("sub");
+  showDate();
   document.querySelectorAll("[data-t]").forEach(function (el) { el.textContent = t(el.getAttribute("data-t")); });
   document.querySelectorAll("[data-lang]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-lang") === lang)); });
   if (map) { if (items.length) render(); else if (map.getZoom() < MIN_ZOOM) setStatus(t("zoomIn")); }
@@ -553,6 +502,7 @@ function start() {
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
   applyLang();
   setStatus(t("zoomIn"));
+  getIndex().catch(function () { setStatus(t("loadErr"), true); });
 }
 document.addEventListener("DOMContentLoaded", start);
 </script>

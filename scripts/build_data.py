@@ -6,11 +6,16 @@ Each tile is a JSON array of records:
   [lat, lon, kind, name, bunker_type, start_date, operator, access, abandoned, osm_id]
 kind: "s" shelter, "m" metro station, "b" historic/other bunker.
 """
-import json, os, re, sys, time, urllib.parse, urllib.request
+import json, os, re, socket, sys, time, urllib.parse, urllib.request
+
+# GitHub runners have no IPv6 route and overpass-api.de publishes IPv6 first: use IPv4 only.
+_gai = socket.getaddrinfo
+socket.getaddrinfo = lambda host, port, family=0, *a, **k: _gai(host, port, socket.AF_INET, *a, **k)
 from collections import defaultdict
 from datetime import datetime, timezone
 
 ENDPOINTS = ["https://overpass-api.de/api/interpreter",
+             "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
              "https://overpass.private.coffee/api/interpreter"]
 COUNTRIES = ("AL AD AT BA BE BG BY CH CY CZ DE DK EE ES FI FR GB GR HR HU IE IS IT "
              "LI LT LU LV MC MD ME MK MT NL NO PL PT RO RS SE SI SK SM UA VA XK").split()
@@ -34,16 +39,16 @@ def query(cc):
 def fetch(q):
     body = urllib.parse.urlencode({"data": q}).encode()
     last = None
-    for attempt in range(4):
+    for attempt in range(3):
         for ep in ENDPOINTS:
             try:
                 req = urllib.request.Request(ep, data=body, headers={"User-Agent": "karta-ubezhishta/1.0 (github.com/Dimana200/karta-ubezhishta)"})
-                with urllib.request.urlopen(req, timeout=900) as r:
+                with urllib.request.urlopen(req, timeout=660) as r:
                     return json.load(r)
             except Exception as e:  # noqa: BLE001 - retry on any network/server error
                 last = e
                 print(f"   {ep}: {e}", flush=True)
-                time.sleep(20 * (attempt + 1))
+                time.sleep(30)
     raise RuntimeError(f"all endpoints failed: {last}")
 
 
