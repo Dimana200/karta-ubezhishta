@@ -6,6 +6,9 @@
 <title>Карта на убежищата</title>
 <meta name="description" content="Убежища, бункери и метростанции в Европа по данни от OpenStreetMap">
 <meta name="theme-color" content="#1D4E9E">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap">
@@ -198,7 +201,7 @@ var T = {
     shelters: "Убежища", metro: "Метро", bunkers: "Стари бункери",
     nearest: "Най-близо до мен", about: "Важно",
     zoomIn: "Приближете картата до област или град, за да се покажат обектите",
-    loading: "Зареждане…", dataFrom: "Данни от", slow: "Данните се зареждат бавно, изчакайте още малко…", shown: "Показани обекти: ", none: "Няма отбелязани обекти тук",
+    loading: "Зареждане…", offline: "Без интернет", offlineMissing: "Без интернет: тази област не е запазена за офлайн", saving: "Запазване на района за офлайн…", saved: "Запазено за офлайн, обекти:", saveBtn: "Запази района за офлайн", about5: "Офлайн: натиснете „Запази района за офлайн“ (около 200 km около вас) или ползвайте „Най-близо до мен“, което запазва района само. Без интернет картата се отваря и показва запазените обекти. Фонът на картата се вижда само там, където сте разглеждали преди. Добавете страницата към началния екран от менюто на браузъра.", dataFrom: "Данни от", slow: "Данните се зареждат бавно, изчакайте още малко…", shown: "Показани обекти: ", none: "Няма отбелязани обекти тук",
     loadErr: "Данните не се заредиха. Проверете интернета и опитайте пак.",
     cached: "Без връзка: показани са последно заредените данни",
     kShelter: "Убежище (според картата)", kMetro: "Метростанция · възможно укритие", kBunker: "Исторически бункер",
@@ -223,7 +226,7 @@ var T = {
     shelters: "Schutzräume", metro: "U-Bahn", bunkers: "Alte Bunker",
     nearest: "In meiner Nähe", about: "Wichtig",
     zoomIn: "Karte vergrößern, um Orte zu laden",
-    loading: "Lädt…", dataFrom: "Daten vom", slow: "Die Daten laden langsam, bitte noch etwas warten…", shown: "Angezeigte Orte: ", none: "Hier sind keine Orte eingetragen",
+    loading: "Lädt…", offline: "Offline", offlineMissing: "Offline: dieses Gebiet ist nicht gespeichert", saving: "Gebiet wird offline gespeichert…", saved: "Offline gespeichert, Orte:", saveBtn: "Gebiet offline speichern", about5: "Offline: Tippen Sie auf „Gebiet offline speichern“ (etwa 200 km um Sie) oder nutzen Sie „In meiner Nähe“, das das Gebiet automatisch speichert. Ohne Internet öffnet sich die Karte mit den gespeicherten Orten. Der Kartenhintergrund erscheint nur dort, wo Sie schon einmal waren. Fügen Sie die Seite über das Browsermenü zum Startbildschirm hinzu.", dataFrom: "Daten vom", slow: "Die Daten laden langsam, bitte noch etwas warten…", shown: "Angezeigte Orte: ", none: "Hier sind keine Orte eingetragen",
     loadErr: "Daten konnten nicht geladen werden. Internet prüfen und erneut versuchen.",
     cached: "Offline: zuletzt geladene Daten werden angezeigt",
     kShelter: "Schutzraum (laut Karte)", kMetro: "U-Bahnhof · mögliche Zuflucht", kBunker: "Historischer Bunker",
@@ -248,7 +251,7 @@ var T = {
     shelters: "Shelters", metro: "Metro", bunkers: "Old bunkers",
     nearest: "Nearest to me", about: "Important",
     zoomIn: "Zoom in to load places",
-    loading: "Loading…", dataFrom: "Data from", slow: "Data is loading slowly, please wait a little longer…", shown: "Places shown: ", none: "No places mapped here",
+    loading: "Loading…", offline: "Offline", offlineMissing: "Offline: this area is not saved", saving: "Saving the area for offline use…", saved: "Saved for offline, places:", saveBtn: "Save area for offline", about5: "Offline: tap “Save area for offline” (about 200 km around you) or use “Nearest to me”, which saves the area automatically. Without internet the map opens and shows the saved places. The map background only appears where you have looked before. Add the page to your home screen from the browser menu.", dataFrom: "Data from", slow: "Data is loading slowly, please wait a little longer…", shown: "Places shown: ", none: "No places mapped here",
     loadErr: "Data could not be loaded. Check your connection and try again.",
     cached: "Offline: showing the last loaded data",
     kShelter: "Shelter (as mapped)", kMetro: "Metro station · possible refuge", kBunker: "Historic bunker",
@@ -341,7 +344,7 @@ function getTile(key) {
   if (!tileP[key]) tileP[key] = fetch(DATA + "tiles/" + key + ".json")
     .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .then(function (rows) { tiles[key] = rows.map(toPlace); return tiles[key]; })
-    .catch(function (e) { delete tileP[key]; throw e; });
+    .catch(function () { delete tileP[key]; missing++; return []; });
   return tileP[key];
 }
 function showDate() {
@@ -354,7 +357,9 @@ function tileKeys(s, w, n, e) {
     for (var x = Math.floor(w); x <= Math.floor(e); x++) out.push(y + "_" + x);
   return out;
 }
+var missing = 0;
 function loadTiles(keys) {
+  missing = 0;
   return getIndex().then(function () {
     return Promise.all(keys.map(getTile));
   }).then(function (lists) { return [].concat.apply([], lists); });
@@ -369,6 +374,8 @@ function load() {
   return loadTiles(keys).then(function (list) {
     items = list.filter(function (p) { return b.contains([p.lat, p.lon]); });
     render();
+    if (missing) setStatus(t(navigator.onLine === false ? "offlineMissing" : "loadErr"), true);
+    else if (navigator.onLine === false) setStatus(t("offline") + " · " + statusEl.textContent);
   }).catch(function () { setStatus(t("loadErr"), true); });
 }
 function scheduleLoad() { clearTimeout(timer); timer = setTimeout(load, 250); }
@@ -452,14 +459,33 @@ function locate() {
         map.setView(userPos, 13, { animate: false });
       }
       showNearest(near);
+      if (navigator.onLine !== false) saveOffline(userPos[0], userPos[1]).then(function () { setStatus(t("shown") + items.length); });
     }).catch(function () { setStatus(t("loadErr"), true); });
   }, function () { setStatus(t("geoErr"), true); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
 }
+function saveOffline(lat, lon) {
+  var la = Math.floor(lat), lo = Math.floor(lon);
+  setStatus(t("saving"));
+  return getIndex().then(function () {
+    var keys = tileKeys(la - 2, lo - 2, la + 2, lo + 2).filter(function (k) { return index.tiles[k]; });
+    return loadTiles(keys).then(function (list) {
+      try { localStorage.setItem("ub-saved", JSON.stringify({ lat: lat, lon: lon, n: list.length })); } catch (e) { /* ignore */ }
+      setStatus(missing ? t("loadErr") : t("saved") + " " + list.length, !!missing);
+    });
+  }).catch(function () { setStatus(t("loadErr"), true); });
+}
 function showAbout() {
+  setTimeout(function () {
+    var b = document.getElementById("b-save");
+    if (b) b.addEventListener("click", function () {
+      var c = userPos || [map.getCenter().lat, map.getCenter().lng];
+      closeSheet(); saveOffline(c[0], c[1]);
+    });
+  }, 0);
   openSheet('<div class="sheet-head"><h2>' + esc(t("aboutTitle")) + '</h2><button class="close" aria-label="×" data-close>×</button></div>' +
-    ["about1", "about2", "about3", "about4"].map(function (k) { return '<p class="note" style="font-size:15px;color:var(--fg);margin:0">' + esc(t(k)) + "</p>"; }).join("") +
+    ["about1", "about2", "about3", "about4", "about5"].map(function (k) { return '<p class="note" style="font-size:15px;color:var(--fg);margin:0">' + esc(t(k)) + "</p>"; }).join("") +
     '<p class="sos">' + esc(t("sos")) + "<b>112</b></p>" +
-    '<div class="actions">' + link("https://www.openstreetmap.org/edit#map=" + map.getZoom() + "/" + map.getCenter().lat.toFixed(5) + "/" + map.getCenter().lng.toFixed(5), t("fix"), true) + "</div>");
+    '<div class="actions"><button class="btn secondary" id="b-save" style="box-shadow:none;border:1px solid var(--line)">' + esc(t("saveBtn")) + "</button>" + link("https://www.openstreetmap.org/edit#map=" + map.getZoom() + "/" + map.getCenter().lat.toFixed(5) + "/" + map.getCenter().lng.toFixed(5), t("fix"), true) + "</div>");
 }
 
 function applyLang() {
@@ -481,7 +507,7 @@ function start() {
   if (typeof L === "undefined") { applyLang(); setStatus(t("loadErr"), true); return; }
   map = L.map("map", { preferCanvas: true, zoomControl: true, worldCopyJump: true }).setView([50.1, 14.4], 5);
   L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-    maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+    maxZoom: 19, crossOrigin: "", attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
   }).addTo(map);
   ["shelter", "metro", "bunker"].forEach(function (k) { layers[k] = L.layerGroup().addTo(map); });
   map.on("moveend", scheduleLoad);
@@ -502,7 +528,13 @@ function start() {
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
   applyLang();
   setStatus(t("zoomIn"));
-  getIndex().catch(function () { setStatus(t("loadErr"), true); });
+  getIndex().catch(function () { setStatus(t(navigator.onLine === false ? "offlineMissing" : "loadErr"), true); });
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem("ub-saved") || "null"); } catch (e) { saved = null; }
+  if (navigator.onLine === false && saved) { map.setView([saved.lat, saved.lon], 12); setStatus(t("offline"), true); }
+  window.addEventListener("offline", function () { setStatus(t("offline"), true); });
+  window.addEventListener("online", function () { load(); });
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(function () { /* offline mode unavailable */ });
 }
 document.addEventListener("DOMContentLoaded", start);
 </script>
