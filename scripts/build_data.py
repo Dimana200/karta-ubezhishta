@@ -23,17 +23,21 @@ HIDDEN = {"missile_silo"}
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 
 
-def query(cc):
-    a = "(area.a)"
-    return (f'[out:json][timeout:600][maxsize:1073741824];'
-            f'area["ISO3166-1"="{cc}"][admin_level=2]->.a;('
-            f'nwr["amenity"="shelter"]["shelter_type"="bomb_shelter"]{a};'
-            f'nwr["bunker_type"~"^(bomb_shelter|personnel_shelter)$"]{a};'
-            f'nwr["military"="bunker"]{a};'
-            f'nwr["building"="bunker"]{a};'
-            f'nwr["disused:military"="bunker"]{a};'
-            f'nwr["railway"="station"]["station"="subway"]{a};'
-            f');out center tags;')
+STATEMENTS = [
+    'nwr["amenity"="shelter"]["shelter_type"="bomb_shelter"]',
+    'nwr["bunker_type"~"^(bomb_shelter|personnel_shelter)$"]',
+    'nwr["military"="bunker"]',
+    'nwr["building"="bunker"]',
+    'nwr["disused:military"="bunker"]',
+    'nwr["railway"="station"]["station"="subway"]',
+]
+
+
+def query(cc, stmt):
+    # One tag per request keeps each query short: the public servers cut requests after ~1-2 minutes.
+    return (f'[out:json][timeout:180];'
+            f'area["ISO3166-1"="{cc}"][admin_level=2]->.a;'
+            f'{stmt}(area.a);out center tags;')
 
 
 def fetch(q):
@@ -92,14 +96,23 @@ def main():
     seen, tiles, stats, failed = set(), defaultdict(list), {}, []
     for cc in only:
         print(f"{cc} ...", flush=True)
-        try:
-            js = fetch(query(cc))
-        except Exception as e:  # noqa: BLE001
-            print(f"   FAILED {cc}: {e}", flush=True)
+        elements, ok = [], True
+        for stmt in STATEMENTS:
+            t0 = time.time()
+            try:
+                part = fetch(query(cc, stmt)).get("elements", [])
+            except Exception as e:  # noqa: BLE001
+                print(f"   FAILED {cc} {stmt}: {e}", flush=True)
+                ok = False
+                break
+            print(f"   {stmt}: {len(part)} in {time.time() - t0:.0f}s", flush=True)
+            elements += part
+            time.sleep(3)
+        if not ok:
             failed.append(cc)
             continue
         n = {"s": 0, "m": 0, "b": 0}
-        for oid, rec in records(js):
+        for oid, rec in records({"elements": elements}):
             if oid in seen:
                 continue
             seen.add(oid)
@@ -107,7 +120,6 @@ def main():
             tiles[f"{int(rec[0] // 1)}_{int(rec[1] // 1)}"].append(rec)
         stats[cc] = n
         print(f"   {n}", flush=True)
-        time.sleep(10)
     if not stats:
         print("nothing downloaded, keeping old data"); sys.exit(1)
     tdir = os.path.join(OUT, "tiles")
