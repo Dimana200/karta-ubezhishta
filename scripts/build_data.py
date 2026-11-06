@@ -95,8 +95,12 @@ def records(js):
 
 
 def main():
+    """Download each country into data/countries/XX.json, then rebuild all tiles from every
+    country file. A country that fails keeps its previous file, so a bad run never empties the map."""
     only = sys.argv[1:] or COUNTRIES
-    seen, tiles, stats, failed = set(), defaultdict(list), {}, []
+    cdir = os.path.join(OUT, "countries")
+    os.makedirs(cdir, exist_ok=True)
+    failed = []
     for cc in only:
         print(f"{cc} ...", flush=True)
         elements, ok = [], True
@@ -105,7 +109,7 @@ def main():
             try:
                 part = fetch(query(cc, stmt)).get("elements", [])
             except Exception as e:  # noqa: BLE001
-                print(f"   FAILED {cc} {stmt}: {e}", flush=True)
+                print(f"   FAILED {cc}: {e}", flush=True)
                 ok = False
                 break
             print(f"   group {STATEMENTS.index(stmt) + 1}: {len(part)} in {time.time() - t0:.0f}s", flush=True)
@@ -114,17 +118,27 @@ def main():
         if not ok:
             failed.append(cc)
             continue
+        recs = dict(records({"elements": elements}))
+        with open(os.path.join(cdir, cc + ".json"), "w", encoding="utf-8") as fh:
+            json.dump(list(recs.items()), fh, ensure_ascii=False, separators=(",", ":"))
         n = {"s": 0, "m": 0, "b": 0}
-        for oid, rec in records({"elements": elements}):
+        for r in recs.values():
+            n[r[2]] += 1
+        print(f"   {n}", flush=True)
+
+    seen, tiles, stats = set(), defaultdict(list), {}
+    for f in sorted(os.listdir(cdir)):
+        cc = f[:-5]
+        n = {"s": 0, "m": 0, "b": 0}
+        for oid, rec in json.load(open(os.path.join(cdir, f), encoding="utf-8")):
             if oid in seen:
                 continue
             seen.add(oid)
             n[rec[2]] += 1
             tiles[f"{int(rec[0] // 1)}_{int(rec[1] // 1)}"].append(rec)
         stats[cc] = n
-        print(f"   {n}", flush=True)
-    if not stats:
-        print("nothing downloaded, keeping old data"); sys.exit(1)
+    if not tiles:
+        print("no data at all"); sys.exit(1)
     tdir = os.path.join(OUT, "tiles")
     os.makedirs(tdir, exist_ok=True)
     for f in os.listdir(tdir):
