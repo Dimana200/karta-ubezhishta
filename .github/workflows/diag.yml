@@ -1,0 +1,19 @@
+name: Diag overpass
+on: workflow_dispatch
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - run: |
+          Q='[out:json][timeout:60];nwr["military"="bunker"](42.6,23.2,42.8,23.4);out center tags;'
+          for EP in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter https://overpass.kumi.systems/api/interpreter https://overpass.osm.jp/api/interpreter; do
+            for V in 4 6; do
+              echo "== $EP ipv$V"
+              curl -$V -sS -m 90 -o /tmp/o.json -w "http=%{http_code} time=%{time_total}s size=%{size_download}\n" --data-urlencode "data=$Q" $EP || true
+            done
+          done
+          Q2='[out:json][timeout:300];area["ISO3166-1"="BG"][admin_level=2]->.a;(nwr["military"="bunker"](area.a);nwr["railway"="station"]["station"="subway"](area.a););out center tags;'
+          for EP in https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter; do
+            echo "== AREA BG $EP"; curl -4 -sS -m 400 -o /tmp/o.json -w "http=%{http_code} time=%{time_total}s size=%{size_download}\n" --data-urlencode "data=$Q2" $EP || true
+          done
