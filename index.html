@@ -1,0 +1,516 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Карта на убежищата</title>
+<meta name="description" content="Убежища, бункери и метростанции в Европа по данни от OpenStreetMap">
+<meta name="theme-color" content="#1D4E9E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Semi+Condensed:wght@600;700&family=Source+Sans+3:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+/* Layout: full-screen map, signage-style top bar, floating "nearest" action, bottom sheet for details. */
+:root {
+  --bg: #F3F4F7;
+  --surface: #FFFFFF;
+  --fg: #1A2233;
+  --muted: #5B6477;
+  --line: #D9DDE6;
+  --cd-orange: #EE7203;   /* international civil defence sign: orange square */
+  --cd-blue: #1D4E9E;     /* ... with a blue triangle */
+  --on-blue: #FFFFFF;
+  --metro: #0E7C6B;
+  --bunker: #7A5C3E;
+  --warn-bg: #FFF1DE;
+  --warn-fg: #7A3E00;
+  --tile-filter: none;
+  --shadow: 0 6px 24px rgba(20, 30, 60, .18);
+  --f-display: "Barlow Semi Condensed", "Arial Narrow", Arial, sans-serif;
+  --f-body: "Source Sans 3", "Segoe UI", Roboto, Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151D; --surface: #1A2030; --fg: #E8ECF4; --muted: #A2ABBE; --line: #2D3548;
+    --cd-blue: #6E9BE8; --on-blue: #0B1830; --metro: #3CC2AA; --bunker: #C9A27C;
+    --warn-bg: #3A2A12; --warn-fg: #FFD39A;
+    --tile-filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9);
+    --shadow: 0 6px 24px rgba(0, 0, 0, .5);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151D; --surface: #1A2030; --fg: #E8ECF4; --muted: #A2ABBE; --line: #2D3548;
+  --cd-blue: #6E9BE8; --on-blue: #0B1830; --metro: #3CC2AA; --bunker: #C9A27C;
+  --warn-bg: #3A2A12; --warn-fg: #FFD39A;
+  --tile-filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9);
+  --shadow: 0 6px 24px rgba(0, 0, 0, .5);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--fg);
+  font: 15px/1.45 var(--f-body);
+  display: flex; flex-direction: column;
+}
+header {
+  background: var(--surface); border-bottom: 1px solid var(--line);
+  padding-top: env(safe-area-inset-top, 0px);
+  z-index: 1000;
+}
+.bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  padding-block: 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand svg { flex: none; }
+.brand h1 {
+  font: 700 22px/1 var(--f-display); letter-spacing: .01em; margin: 0;
+  text-wrap: balance;
+}
+.brand small { display: block; font: 600 11px/1.2 var(--f-body); color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.layers { display: flex; flex-wrap: wrap; gap: 6px; margin-left: auto; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg);
+  border-radius: 999px; padding: 5px 11px; font: 600 13px/1 var(--f-body); cursor: pointer;
+}
+.chip[aria-pressed="false"] { opacity: .45; }
+.chip:focus-visible, button:focus-visible, a:focus-visible { outline: 3px solid var(--cd-orange); outline-offset: 2px; }
+.dot { width: 11px; height: 11px; border-radius: 50%; flex: none; }
+.dot.shelter { background: var(--cd-blue); }
+.dot.metro { background: var(--metro); }
+.dot.bunker { background: transparent; border: 2px dashed var(--bunker); }
+.lang { display: flex; gap: 2px; }
+.lang button {
+  border: 0; background: transparent; color: var(--muted); font: 600 12px/1 var(--f-body);
+  padding: 6px 6px; cursor: pointer; border-radius: 6px; letter-spacing: .05em;
+}
+.lang button[aria-pressed="true"] { color: var(--fg); background: var(--bg); }
+main { position: relative; flex: 1; min-height: 0; }
+#map { position: absolute; inset: 0; background: var(--bg); }
+.leaflet-tile-pane { filter: var(--tile-filter); }
+.leaflet-container { font-family: var(--f-body); }
+.leaflet-control-attribution { background: var(--surface) !important; color: var(--muted) !important; }
+.leaflet-control-attribution a { color: var(--cd-blue) !important; }
+.leaflet-bar a { background: var(--surface) !important; color: var(--fg) !important; border-color: var(--line) !important; }
+.status {
+  position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+  z-index: 600; max-width: calc(100% - 120px);
+  background: var(--surface); color: var(--fg); box-shadow: var(--shadow);
+  border-radius: 999px; padding: 7px 14px; font: 600 13px/1.3 var(--f-body); text-align: center;
+}
+.status.err { background: var(--warn-bg); color: var(--warn-fg); }
+.fab {
+  position: absolute; z-index: 600;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(28px + env(safe-area-inset-bottom, 0px));
+  display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+}
+.btn {
+  border: 0; cursor: pointer; border-radius: 12px; box-shadow: var(--shadow);
+  font: 700 16px/1 var(--f-display); letter-spacing: .02em; padding: 14px 18px;
+  background: var(--cd-orange); color: #1A1206;
+}
+.btn.secondary { background: var(--surface); color: var(--fg); font-size: 14px; padding: 11px 14px; }
+.sheet {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 800;
+  background: var(--surface); color: var(--fg); box-shadow: var(--shadow);
+  border-radius: 16px 16px 0 0; max-height: 62%; overflow-y: auto;
+  padding-top: 14px;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.sheet-in { max-width: 640px; margin: 0 auto; display: grid; gap: 10px; }
+.sheet-head { display: flex; align-items: flex-start; gap: 10px; }
+.sheet-head h2 { font: 700 21px/1.15 var(--f-display); margin: 0; flex: 1; min-width: 0; overflow-wrap: anywhere; text-wrap: balance; }
+.close { border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 10px; width: 34px; height: 34px; font-size: 18px; cursor: pointer; flex: none; }
+.kind { font: 600 12px/1 var(--f-body); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 7px; }
+.facts { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.warn { background: var(--warn-bg); color: var(--warn-fg); border-radius: 10px; padding: 10px 12px; font-size: 14px; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.actions a {
+  display: inline-flex; align-items: center; text-decoration: none; font: 600 14px/1 var(--f-body);
+  padding: 10px 13px; border-radius: 10px; border: 1px solid var(--line); color: var(--fg); background: var(--bg);
+}
+.actions a.primary { background: var(--cd-blue); border-color: var(--cd-blue); color: var(--on-blue); }
+.near { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.near button {
+  width: 100%; text-align: left; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 10px;
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 10px; padding: 9px 11px; cursor: pointer; font: 15px/1.3 var(--f-body);
+}
+.near .nm { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.near .km { font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
+.note { color: var(--muted); font-size: 13px; margin: 0; }
+.sos { font: 700 15px/1.3 var(--f-body); }
+.sos b { color: var(--cd-orange); font-family: var(--f-display); font-size: 19px; }
+@media (max-width: 560px) {
+  .layers { margin-left: 0; width: 100%; }
+  .brand h1 { font-size: 20px; }
+  .status { top: 10px; max-width: calc(100% - 32px); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .sheet { animation: up .18s ease-out; }
+  @keyframes up { from { transform: translateY(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="3" fill="#EE7203"/><path d="M17 6 L29 27 H5 Z" fill="#1D4E9E"/></svg>
+      <div><h1 id="t-title">Карта на убежищата</h1><small id="t-sub">Европа · OpenStreetMap</small></div>
+    </div>
+    <div class="layers" role="group" aria-label="Слоеве">
+      <button class="chip" id="l-shelter" aria-pressed="true"><span class="dot shelter"></span><span data-t="shelters">Убежища</span></button>
+      <button class="chip" id="l-metro" aria-pressed="true"><span class="dot metro"></span><span data-t="metro">Метро</span></button>
+      <button class="chip" id="l-bunker" aria-pressed="true"><span class="dot bunker"></span><span data-t="bunkers">Стари бункери</span></button>
+    </div>
+    <div class="lang" role="group" aria-label="Език">
+      <button data-lang="bg">BG</button><button data-lang="de">DE</button><button data-lang="en">EN</button>
+    </div>
+  </div>
+</header>
+<main>
+  <div id="map" role="region" aria-label="Карта"></div>
+  <div class="status" id="status" role="status"></div>
+  <div class="fab">
+    <button class="btn secondary" id="b-info" data-t="about">Важно</button>
+    <button class="btn" id="b-near" data-t="nearest">Най-близо до мен</button>
+  </div>
+  <section class="sheet" id="sheet" hidden aria-live="polite"><div class="sheet-in" id="sheet-in"></div></section>
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+"use strict";
+var T = {
+  bg: {
+    title: "Карта на убежищата", sub: "Европа · OpenStreetMap",
+    shelters: "Убежища", metro: "Метро", bunkers: "Стари бункери",
+    nearest: "Най-близо до мен", about: "Важно",
+    zoomIn: "Приближете картата, за да се заредят обектите",
+    loading: "Зареждане…", shown: "Показани обекти: ", none: "Няма отбелязани обекти тук",
+    loadErr: "Сървърът с данни не отговаря. Опитайте пак след малко.",
+    cached: "Без връзка: показани са последно заредените данни",
+    kShelter: "Убежище (според картата)", kMetro: "Метростанция · възможно укритие", kBunker: "Исторически бункер",
+    unnamed: "Без име", fType: "Вид", fYear: "Година", fOp: "Стопанин", fAccess: "Достъп", fLevel: "Ниво",
+    wBunker: "Не е проверено убежище. Старите бункери могат да са разрушени, наводнени, частни или опасни. Не влизайте.",
+    wShelter: "Отбелязано е от доброволци. Не знаем дали е отворено и годно днес. Следвайте указанията на властите.",
+    wMetro: "Подземните станции често се използват за укритие, но не са официално убежище, докато властите не обявят това.",
+    wAbandoned: "Обектът е отбелязан като изоставен или разрушен.",
+    route: "Маршрут пеша", osm: "Виж в OpenStreetMap", fix: "Поправи / добави на картата",
+    nearTitle: "Най-близки места за укритие", nearNone: "В заредената зона няма убежища или метро. Отдалечете картата и опитайте пак.",
+    geoErr: "Не получихме местоположението. Разрешете локацията или преместете картата ръчно.",
+    locating: "Търсим местоположението…",
+    aboutTitle: "Как да ползвате картата",
+    about1: "Данните са от OpenStreetMap, отбелязани от доброволци. Може да са непълни или остарели.",
+    about2: "Синьо: отбелязани убежища. Зелено: подземни метростанции. Кафяво с пунктир: стари бункери, само за информация.",
+    about3: "При реална опасност слушайте официалните предупреждения (в Германия приложението NINA).",
+    about4: "Липсва бункер? Добавете го в OpenStreetMap и той ще се появи тук.",
+    sos: "Спешен телефон в цяла Европа: "
+  },
+  de: {
+    title: "Schutzraum-Karte", sub: "Europa · OpenStreetMap",
+    shelters: "Schutzräume", metro: "U-Bahn", bunkers: "Alte Bunker",
+    nearest: "In meiner Nähe", about: "Wichtig",
+    zoomIn: "Karte vergrößern, um Orte zu laden",
+    loading: "Lädt…", shown: "Angezeigte Orte: ", none: "Hier sind keine Orte eingetragen",
+    loadErr: "Der Datenserver antwortet nicht. Bitte gleich noch einmal versuchen.",
+    cached: "Offline: zuletzt geladene Daten werden angezeigt",
+    kShelter: "Schutzraum (laut Karte)", kMetro: "U-Bahnhof · mögliche Zuflucht", kBunker: "Historischer Bunker",
+    unnamed: "Ohne Namen", fType: "Art", fYear: "Jahr", fOp: "Betreiber", fAccess: "Zugang", fLevel: "Ebene",
+    wBunker: "Kein geprüfter Schutzraum. Alte Bunker können verfallen, überflutet, privat oder gefährlich sein. Nicht betreten.",
+    wShelter: "Von Freiwilligen eingetragen. Ob er heute offen und nutzbar ist, ist unbekannt. Folgen Sie den Behörden.",
+    wMetro: "Unterirdische Bahnhöfe dienen oft als Zuflucht, sind aber erst nach behördlicher Freigabe offizielle Schutzorte.",
+    wAbandoned: "Als verlassen oder zerstört eingetragen.",
+    route: "Fußweg", osm: "In OpenStreetMap ansehen", fix: "Korrigieren / eintragen",
+    nearTitle: "Nächste Zufluchtsorte", nearNone: "Im geladenen Bereich gibt es keine Schutzräume oder U-Bahnhöfe. Karte verkleinern und erneut versuchen.",
+    geoErr: "Kein Standort erhalten. Standortfreigabe erlauben oder Karte selbst verschieben.",
+    locating: "Standort wird gesucht…",
+    aboutTitle: "So nutzen Sie die Karte",
+    about1: "Die Daten stammen aus OpenStreetMap und wurden von Freiwilligen eingetragen. Sie können lückenhaft oder veraltet sein.",
+    about2: "Blau: eingetragene Schutzräume. Grün: unterirdische U-Bahnhöfe. Braun gestrichelt: alte Bunker, nur zur Information.",
+    about3: "Bei echter Gefahr gelten die amtlichen Warnungen (in Deutschland die NINA-App).",
+    about4: "Ein Bunker fehlt? Tragen Sie ihn in OpenStreetMap ein, dann erscheint er hier.",
+    sos: "Notruf in ganz Europa: "
+  },
+  en: {
+    title: "Shelter Map", sub: "Europe · OpenStreetMap",
+    shelters: "Shelters", metro: "Metro", bunkers: "Old bunkers",
+    nearest: "Nearest to me", about: "Important",
+    zoomIn: "Zoom in to load places",
+    loading: "Loading…", shown: "Places shown: ", none: "No places mapped here",
+    loadErr: "The data server is not responding. Try again in a moment.",
+    cached: "Offline: showing the last loaded data",
+    kShelter: "Shelter (as mapped)", kMetro: "Metro station · possible refuge", kBunker: "Historic bunker",
+    unnamed: "Unnamed", fType: "Type", fYear: "Year", fOp: "Operator", fAccess: "Access", fLevel: "Level",
+    wBunker: "Not a verified shelter. Old bunkers can be collapsed, flooded, private or dangerous. Do not enter.",
+    wShelter: "Mapped by volunteers. We do not know if it is open and usable today. Follow the authorities.",
+    wMetro: "Underground stations are often used for refuge, but they are not official shelters until the authorities say so.",
+    wAbandoned: "Mapped as abandoned or ruined.",
+    route: "Walking route", osm: "View in OpenStreetMap", fix: "Fix / add on the map",
+    nearTitle: "Nearest places to take cover", nearNone: "No shelters or metro stations in the loaded area. Zoom out and try again.",
+    geoErr: "Could not get your location. Allow location access or move the map yourself.",
+    locating: "Finding your location…",
+    aboutTitle: "How to use the map",
+    about1: "Data comes from OpenStreetMap, added by volunteers. It may be incomplete or out of date.",
+    about2: "Blue: mapped shelters. Green: underground metro stations. Brown dashed: old bunkers, for information only.",
+    about3: "In a real emergency, follow official warnings (in Germany the NINA app).",
+    about4: "A bunker is missing? Add it to OpenStreetMap and it will appear here.",
+    sos: "Emergency number across Europe: "
+  }
+};
+
+var BUNKER_TYPES = {
+  bg: { pillbox: "огнева точка (ДОТ)", gun_emplacement: "оръдейна позиция", blockhouse: "блокхаус", munitions: "склад за боеприпаси",
+        technical: "технически", personnel_shelter: "укритие за хора", bomb_shelter: "бомбоубежище", mg_nest: "картечно гнездо", hardened_aircraft_shelter: "укритие за самолети" },
+  de: { pillbox: "Kampfstand", gun_emplacement: "Geschützstellung", blockhouse: "Blockhaus", munitions: "Munitionsbunker",
+        technical: "technisch", personnel_shelter: "Personenschutz", bomb_shelter: "Luftschutzbunker", mg_nest: "MG-Nest", hardened_aircraft_shelter: "Flugzeugschutz" },
+  en: { pillbox: "pillbox", gun_emplacement: "gun emplacement", blockhouse: "blockhouse", munitions: "munitions",
+        technical: "technical", personnel_shelter: "personnel shelter", bomb_shelter: "bomb shelter", mg_nest: "machine-gun nest", hardened_aircraft_shelter: "aircraft shelter" }
+};
+
+var ENDPOINTS = ["https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter"];
+var MIN_ZOOM = 10;
+var HIDDEN_TYPES = { missile_silo: 1 };
+
+var lang = "bg";
+try { lang = localStorage.getItem("ub-lang") || ""; } catch (e) { lang = ""; }
+if (!T[lang]) {
+  var nl = (navigator.language || "bg").slice(0, 2);
+  lang = T[nl] ? nl : "en";
+}
+function t(k) { return T[lang][k] || T.en[k] || k; }
+
+function classify(tags) {
+  var tg = tags || {};
+  if ((tg.railway === "station" && tg.station === "subway") || (tg.station === "subway" && tg.public_transport === "station")) return "metro";
+  if ((tg.amenity === "shelter" && tg.shelter_type === "bomb_shelter") || tg.bunker_type === "bomb_shelter" || tg.bunker_type === "personnel_shelter") return "shelter";
+  if (tg.military === "bunker" || tg.building === "bunker" || tg["disused:military"] === "bunker" || tg["abandoned:military"] === "bunker") {
+    if (HIDDEN_TYPES[tg.bunker_type]) return null;
+    return "bunker";
+  }
+  return null;
+}
+function isAbandoned(tg) {
+  if (tg.disused === "yes" || tg.abandoned === "yes" || tg.ruins === "yes" || tg.historic === "ruins") return true;
+  for (var k in tg) { if (/^(disused|abandoned|ruins|demolished):/.test(k)) return true; }
+  return false;
+}
+function buildQuery(b) {
+  var bb = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(function (v) { return v.toFixed(4); }).join(",");
+  return "[out:json][timeout:25];(" +
+    'nwr["amenity"="shelter"]["shelter_type"="bomb_shelter"](' + bb + ");" +
+    'nwr["bunker_type"~"^(bomb_shelter|personnel_shelter)$"](' + bb + ");" +
+    'nwr["military"="bunker"](' + bb + ");" +
+    'nwr["building"="bunker"](' + bb + ");" +
+    'nwr["disused:military"="bunker"](' + bb + ");" +
+    'nwr["railway"="station"]["station"="subway"](' + bb + ");" +
+    ");out center tags 4000;";
+}
+function parse(json) {
+  var out = [], seen = {};
+  (json.elements || []).forEach(function (el) {
+    var lat = el.lat != null ? el.lat : el.center && el.center.lat;
+    var lon = el.lon != null ? el.lon : el.center && el.center.lon;
+    if (lat == null || lon == null) return;
+    var key = el.type + "/" + el.id;
+    if (seen[key]) return;
+    var kind = classify(el.tags);
+    if (!kind) return;
+    seen[key] = 1;
+    out.push({ id: key, lat: lat, lon: lon, kind: kind, tags: el.tags || {} });
+  });
+  return out;
+}
+function distKm(a, b, c, d) {
+  var R = 6371, r = Math.PI / 180, x = (c - a) * r, y = (d - b) * r;
+  var h = Math.sin(x / 2) * Math.sin(x / 2) + Math.cos(a * r) * Math.cos(c * r) * Math.sin(y / 2) * Math.sin(y / 2);
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+function nameOf(p) { var tg = p.tags; return tg["name:" + lang] || tg.name || tg["official_name"] || tg.ref || t("unnamed"); }
+
+var map, layers = {}, items = [], visible = { shelter: true, metro: true, bunker: true };
+var statusEl, sheet, sheetIn, timer = null, ctrl = null, lastKey = "", userPos = null, userMarker = null;
+
+function setStatus(msg, err) {
+  statusEl.textContent = msg; statusEl.className = "status" + (err ? " err" : ""); statusEl.hidden = !msg;
+}
+function css(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function styleFor(kind) {
+  if (kind === "shelter") return { radius: 8, color: "#ffffff", weight: 2, fillColor: css("--cd-blue"), fillOpacity: 1 };
+  if (kind === "metro") return { radius: 7, color: "#ffffff", weight: 2, fillColor: css("--metro"), fillOpacity: 1 };
+  return { radius: 6, color: css("--bunker"), weight: 2, dashArray: "3 3", fillColor: css("--bunker"), fillOpacity: .15 };
+}
+function render() {
+  ["shelter", "metro", "bunker"].forEach(function (k) { layers[k].clearLayers(); });
+  items.forEach(function (p) {
+    var m = L.circleMarker([p.lat, p.lon], styleFor(p.kind));
+    m.on("click", function () { showPlace(p); });
+    layers[p.kind].addLayer(m);
+  });
+  var n = items.filter(function (p) { return visible[p.kind]; }).length;
+  setStatus(n ? t("shown") + n : t("none"));
+}
+
+function save(key, list) {
+  try { localStorage.setItem("ub-cache", JSON.stringify({ key: key, items: list.slice(0, 4000) })); } catch (e) { /* storage unavailable */ }
+}
+function loadCache() {
+  try { var c = JSON.parse(localStorage.getItem("ub-cache") || "null"); return c && c.items ? c.items : null; } catch (e) { return null; }
+}
+
+function fetchOverpass(q, i) {
+  i = i || 0;
+  return fetch(ENDPOINTS[i], { method: "POST", body: "data=" + encodeURIComponent(q),
+    headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: ctrl.signal })
+    .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
+    .catch(function (e) {
+      if (e.name === "AbortError" || i + 1 >= ENDPOINTS.length) throw e;
+      return fetchOverpass(q, i + 1);
+    });
+}
+function load(force) {
+  if (!map) return Promise.resolve();
+  if (map.getZoom() < MIN_ZOOM) { setStatus(t("zoomIn")); return Promise.resolve(); }
+  var b = map.getBounds().pad(0.25);
+  var key = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(function (v) { return v.toFixed(2); }).join(",");
+  if (!force && key === lastKey) return Promise.resolve();
+  if (ctrl) ctrl.abort();
+  ctrl = new AbortController();
+  setStatus(t("loading"));
+  return fetchOverpass(buildQuery(b)).then(function (json) {
+    lastKey = key; items = parse(json); save(key, items); render();
+  }).catch(function (e) {
+    if (e.name === "AbortError") return;
+    var c = loadCache();
+    if (c && c.length) { items = c; render(); setStatus(t("cached"), true); }
+    else setStatus(t("loadErr"), true);
+  });
+}
+function scheduleLoad() { clearTimeout(timer); timer = setTimeout(load, 450); }
+
+function link(href, label, primary) {
+  return '<a href="' + esc(href) + '" target="_blank" rel="noopener"' + (primary ? ' class="primary"' : "") + ">" + esc(label) + "</a>";
+}
+function openSheet(html) { sheetIn.innerHTML = html; sheet.hidden = false; var c = sheetIn.querySelector(".close"); if (c) c.focus(); }
+function closeSheet() { sheet.hidden = true; }
+
+function showPlace(p) {
+  var tg = p.tags, rows = [];
+  var kindLabel = p.kind === "shelter" ? t("kShelter") : p.kind === "metro" ? t("kMetro") : t("kBunker");
+  if (tg.bunker_type) rows.push([t("fType"), (BUNKER_TYPES[lang][tg.bunker_type] || tg.bunker_type)]);
+  if (tg.start_date || tg["construction_date"]) rows.push([t("fYear"), tg.start_date || tg.construction_date]);
+  if (tg.operator) rows.push([t("fOp"), tg.operator]);
+  if (tg.access) rows.push([t("fAccess"), tg.access]);
+  if (tg.level || tg.layer) rows.push([t("fLevel"), tg.level || tg.layer]);
+  var warn = p.kind === "bunker" ? t("wBunker") : p.kind === "metro" ? t("wMetro") : t("wShelter");
+  if (isAbandoned(tg)) warn = t("wAbandoned") + " " + warn;
+  var dist = userPos ? " · " + distKm(userPos[0], userPos[1], p.lat, p.lon).toFixed(1) + " km" : "";
+  var html = '<div class="sheet-head"><div style="flex:1;min-width:0;display:grid;gap:6px">' +
+    '<div class="kind"><span class="dot ' + p.kind + '"></span>' + esc(kindLabel) + esc(dist) + "</div>" +
+    "<h2>" + esc(nameOf(p)) + "</h2></div>" +
+    '<button class="close" aria-label="×" data-close>×</button></div>' +
+    (rows.length ? '<dl class="facts">' + rows.map(function (r) { return "<dt>" + esc(r[0]) + "</dt><dd>" + esc(r[1]) + "</dd>"; }).join("") + "</dl>" : "") +
+    (tg.description ? '<p class="note">' + esc(tg.description) + "</p>" : "") +
+    '<div class="warn">' + esc(warn) + "</div>" +
+    '<div class="actions">' +
+    (p.kind !== "bunker" ? link("https://www.google.com/maps/dir/?api=1&travelmode=walking&destination=" + p.lat + "," + p.lon, t("route"), true) : "") +
+    link("https://www.openstreetmap.org/" + p.id, t("osm")) +
+    link("https://www.openstreetmap.org/edit#map=19/" + p.lat.toFixed(5) + "/" + p.lon.toFixed(5), t("fix")) +
+    "</div>";
+  openSheet(html);
+}
+
+function showNearest() {
+  var cand = items.filter(function (p) { return p.kind !== "bunker"; }).map(function (p) {
+    return { p: p, d: distKm(userPos[0], userPos[1], p.lat, p.lon) };
+  }).sort(function (a, b) { return a.d - b.d; }).slice(0, 6);
+  var html = '<div class="sheet-head"><h2>' + esc(t("nearTitle")) + '</h2><button class="close" aria-label="×" data-close>×</button></div>';
+  if (!cand.length) html += '<p class="note">' + esc(t("nearNone")) + "</p>";
+  else html += '<ul class="near">' + cand.map(function (c, i) {
+    return '<li><button data-near="' + i + '"><span class="dot ' + c.p.kind + '"></span><span class="nm">' + esc(nameOf(c.p)) +
+      '</span><span class="km">' + c.d.toFixed(1) + " km</span></button></li>";
+  }).join("") + "</ul>";
+  html += '<p class="sos">' + esc(t("sos")) + "<b>112</b></p>";
+  openSheet(html);
+  sheetIn.querySelectorAll("[data-near]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var p = cand[+btn.getAttribute("data-near")].p;
+      map.setView([p.lat, p.lon], Math.max(map.getZoom(), 16));
+      showPlace(p);
+    });
+  });
+}
+function locate() {
+  if (!navigator.geolocation) { setStatus(t("geoErr"), true); return; }
+  setStatus(t("locating"));
+  navigator.geolocation.getCurrentPosition(function (pos) {
+    userPos = [pos.coords.latitude, pos.coords.longitude];
+    if (userMarker) map.removeLayer(userMarker);
+    userMarker = L.circleMarker(userPos, { radius: 9, color: "#ffffff", weight: 3, fillColor: css("--cd-orange"), fillOpacity: 1 }).addTo(map);
+    map.setView(userPos, 14);
+    load(true).then(showNearest);
+  }, function () { setStatus(t("geoErr"), true); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
+}
+function showAbout() {
+  openSheet('<div class="sheet-head"><h2>' + esc(t("aboutTitle")) + '</h2><button class="close" aria-label="×" data-close>×</button></div>' +
+    ["about1", "about2", "about3", "about4"].map(function (k) { return '<p class="note" style="font-size:15px;color:var(--fg);margin:0">' + esc(t(k)) + "</p>"; }).join("") +
+    '<p class="sos">' + esc(t("sos")) + "<b>112</b></p>" +
+    '<div class="actions">' + link("https://www.openstreetmap.org/edit#map=" + map.getZoom() + "/" + map.getCenter().lat.toFixed(5) + "/" + map.getCenter().lng.toFixed(5), t("fix"), true) + "</div>");
+}
+
+function applyLang() {
+  document.documentElement.lang = lang;
+  document.title = t("title");
+  document.getElementById("t-title").textContent = t("title");
+  document.getElementById("t-sub").textContent = t("sub");
+  document.querySelectorAll("[data-t]").forEach(function (el) { el.textContent = t(el.getAttribute("data-t")); });
+  document.querySelectorAll("[data-lang]").forEach(function (b) { b.setAttribute("aria-pressed", String(b.getAttribute("data-lang") === lang)); });
+  if (map) { if (items.length) render(); else if (map.getZoom() < MIN_ZOOM) setStatus(t("zoomIn")); }
+  closeSheet();
+}
+
+function start() {
+  statusEl = document.getElementById("status");
+  sheet = document.getElementById("sheet");
+  sheetIn = document.getElementById("sheet-in");
+  if (typeof L === "undefined") { applyLang(); setStatus(t("loadErr"), true); return; }
+  map = L.map("map", { preferCanvas: true, zoomControl: true, worldCopyJump: true }).setView([50.1, 14.4], 5);
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>'
+  }).addTo(map);
+  ["shelter", "metro", "bunker"].forEach(function (k) { layers[k] = L.layerGroup().addTo(map); });
+  map.on("moveend", scheduleLoad);
+  ["shelter", "metro", "bunker"].forEach(function (k) {
+    var b = document.getElementById("l-" + k);
+    b.addEventListener("click", function () {
+      visible[k] = !visible[k]; b.setAttribute("aria-pressed", String(visible[k]));
+      if (visible[k]) map.addLayer(layers[k]); else map.removeLayer(layers[k]);
+      if (items.length) setStatus(t("shown") + items.filter(function (p) { return visible[p.kind]; }).length);
+    });
+  });
+  document.querySelectorAll("[data-lang]").forEach(function (b) {
+    b.addEventListener("click", function () { lang = b.getAttribute("data-lang"); try { localStorage.setItem("ub-lang", lang); } catch (e) { /* ignore */ } applyLang(); });
+  });
+  document.getElementById("b-near").addEventListener("click", locate);
+  document.getElementById("b-info").addEventListener("click", showAbout);
+  sheet.addEventListener("click", function (e) { if (e.target.closest("[data-close]")) closeSheet(); });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeSheet(); });
+  applyLang();
+  setStatus(t("zoomIn"));
+}
+document.addEventListener("DOMContentLoaded", start);
+</script>
+</body>
+</html>
