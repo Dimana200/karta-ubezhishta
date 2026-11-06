@@ -24,12 +24,15 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data")
 
 
 STATEMENTS = [
-    'nwr["amenity"="shelter"]["shelter_type"="bomb_shelter"]',
-    'nwr["bunker_type"~"^(bomb_shelter|personnel_shelter)$"]',
-    'nwr["military"="bunker"]',
-    'nwr["building"="bunker"]',
-    'nwr["disused:military"="bunker"]',
-    'nwr["railway"="station"]["station"="subway"]',
+    # places to take cover
+    'nwr["amenity"="shelter"]["shelter_type"="bomb_shelter"]{a};'
+    'nwr["bunker_type"~"^(bomb_shelter|personnel_shelter)$"]{a};'
+    'nwr["station"="subway"]{a};'
+    'nwr["railway"="station"]["subway"="yes"]{a};',
+    # historic and other bunkers
+    'nwr["military"="bunker"]{a};'
+    'nwr["building"="bunker"]{a};'
+    'nwr["disused:military"="bunker"]{a};',
 ]
 
 
@@ -37,7 +40,7 @@ def query(cc, stmt):
     # One tag per request keeps each query short: the public servers cut requests after ~1-2 minutes.
     return (f'[out:json][timeout:180];'
             f'area["ISO3166-1"="{cc}"][admin_level=2]->.a;'
-            f'{stmt}(area.a);out center tags;')
+            f'({stmt.format(a="(area.a)")});out center tags;')
 
 
 def fetch(q):
@@ -57,9 +60,9 @@ def fetch(q):
 
 
 def classify(t):
-    if (t.get("railway") == "station" and t.get("station") == "subway") or \
-       (t.get("station") == "subway" and t.get("public_transport") == "station"):
-        return "m"
+    if t.get("station") == "subway" or (t.get("railway") == "station" and t.get("subway") == "yes"):
+        if t.get("railway") in ("station", "halt") or t.get("public_transport") == "station":
+            return "m"
     if (t.get("amenity") == "shelter" and t.get("shelter_type") == "bomb_shelter") or \
        t.get("bunker_type") in ("bomb_shelter", "personnel_shelter"):
         return "s"
@@ -105,7 +108,7 @@ def main():
                 print(f"   FAILED {cc} {stmt}: {e}", flush=True)
                 ok = False
                 break
-            print(f"   {stmt}: {len(part)} in {time.time() - t0:.0f}s", flush=True)
+            print(f"   group {STATEMENTS.index(stmt) + 1}: {len(part)} in {time.time() - t0:.0f}s", flush=True)
             elements += part
             time.sleep(3)
         if not ok:
