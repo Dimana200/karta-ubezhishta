@@ -198,7 +198,7 @@ var T = {
     shelters: "Убежища", metro: "Метро", bunkers: "Стари бункери",
     nearest: "Най-близо до мен", about: "Важно",
     zoomIn: "Приближете картата, за да се заредят обектите",
-    loading: "Зареждане…", shown: "Показани обекти: ", none: "Няма отбелязани обекти тук",
+    loading: "Зареждане…", slow: "Данните се зареждат бавно, изчакайте още малко…", shown: "Показани обекти: ", none: "Няма отбелязани обекти тук",
     loadErr: "Сървърът с данни не отговаря. Опитайте пак след малко.",
     cached: "Без връзка: показани са последно заредените данни",
     kShelter: "Убежище (според картата)", kMetro: "Метростанция · възможно укритие", kBunker: "Исторически бункер",
@@ -223,7 +223,7 @@ var T = {
     shelters: "Schutzräume", metro: "U-Bahn", bunkers: "Alte Bunker",
     nearest: "In meiner Nähe", about: "Wichtig",
     zoomIn: "Karte vergrößern, um Orte zu laden",
-    loading: "Lädt…", shown: "Angezeigte Orte: ", none: "Hier sind keine Orte eingetragen",
+    loading: "Lädt…", slow: "Die Daten laden langsam, bitte noch etwas warten…", shown: "Angezeigte Orte: ", none: "Hier sind keine Orte eingetragen",
     loadErr: "Der Datenserver antwortet nicht. Bitte gleich noch einmal versuchen.",
     cached: "Offline: zuletzt geladene Daten werden angezeigt",
     kShelter: "Schutzraum (laut Karte)", kMetro: "U-Bahnhof · mögliche Zuflucht", kBunker: "Historischer Bunker",
@@ -248,7 +248,7 @@ var T = {
     shelters: "Shelters", metro: "Metro", bunkers: "Old bunkers",
     nearest: "Nearest to me", about: "Important",
     zoomIn: "Zoom in to load places",
-    loading: "Loading…", shown: "Places shown: ", none: "No places mapped here",
+    loading: "Loading…", slow: "Data is loading slowly, please wait a little longer…", shown: "Places shown: ", none: "No places mapped here",
     loadErr: "The data server is not responding. Try again in a moment.",
     cached: "Offline: showing the last loaded data",
     kShelter: "Shelter (as mapped)", kMetro: "Metro station · possible refuge", kBunker: "Historic bunker",
@@ -341,7 +341,7 @@ function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "
 function nameOf(p) { var tg = p.tags; return tg["name:" + lang] || tg.name || tg["official_name"] || tg.ref || t("unnamed"); }
 
 var map, layers = {}, items = [], visible = { shelter: true, metro: true, bunker: true };
-var statusEl, sheet, sheetIn, timer = null, ctrl = null, lastKey = "", userPos = null, userMarker = null;
+var statusEl, sheet, sheetIn, timer = null, ctrl = null, inflight = null, inflightKey = "", lastKey = "", userPos = null, userMarker = null;
 
 function setStatus(msg, err) {
   statusEl.textContent = msg; statusEl.className = "status" + (err ? " err" : ""); statusEl.hidden = !msg;
@@ -370,33 +370,44 @@ function loadCache() {
   try { var c = JSON.parse(localStorage.getItem("ub-cache") || "null"); return c && c.items ? c.items : null; } catch (e) { return null; }
 }
 
-function fetchOverpass(q, i) {
-  i = i || 0;
+function fetchOverpass(q, i, c) {
+  var own = new AbortController();
+  var tm = setTimeout(function () { own.abort(); }, 40000);   // one slow server: try the next one
+  var onAbort = function () { own.abort(); };
+  c.signal.addEventListener("abort", onAbort);
   return fetch(ENDPOINTS[i], { method: "POST", body: "data=" + encodeURIComponent(q),
-    headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: ctrl.signal })
+    headers: { "Content-Type": "application/x-www-form-urlencoded" }, signal: own.signal })
     .then(function (r) { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); })
     .catch(function (e) {
-      if (e.name === "AbortError" || i + 1 >= ENDPOINTS.length) throw e;
-      return fetchOverpass(q, i + 1);
-    });
+      if (c.signal.aborted || i + 1 >= ENDPOINTS.length) throw e;
+      return fetchOverpass(q, i + 1, c);
+    })
+    .finally(function () { clearTimeout(tm); c.signal.removeEventListener("abort", onAbort); });
 }
 function load(force) {
   if (!map) return Promise.resolve();
   if (map.getZoom() < MIN_ZOOM) { setStatus(t("zoomIn")); return Promise.resolve(); }
   var b = map.getBounds().pad(0.25);
   var key = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()].map(function (v) { return v.toFixed(2); }).join(",");
+  if (inflight && key === inflightKey) return inflight;   // same area already loading: wait for it
   if (!force && key === lastKey) return Promise.resolve();
   if (ctrl) ctrl.abort();
   ctrl = new AbortController();
+  var myCtrl = ctrl, slow = setTimeout(function () { setStatus(t("slow")); }, 6000);
   setStatus(t("loading"));
-  return fetchOverpass(buildQuery(b)).then(function (json) {
+  inflightKey = key;
+  inflight = fetchOverpass(buildQuery(b), 0, myCtrl).then(function (json) {
     lastKey = key; items = parse(json); save(key, items); render();
   }).catch(function (e) {
-    if (e.name === "AbortError") return;
+    if (myCtrl.signal.aborted) return;
     var c = loadCache();
     if (c && c.length) { items = c; render(); setStatus(t("cached"), true); }
     else setStatus(t("loadErr"), true);
+  }).then(function () {
+    clearTimeout(slow);
+    if (ctrl === myCtrl) { inflight = null; inflightKey = ""; }
   });
+  return inflight;
 }
 function scheduleLoad() { clearTimeout(timer); timer = setTimeout(load, 450); }
 
@@ -459,8 +470,9 @@ function locate() {
     userPos = [pos.coords.latitude, pos.coords.longitude];
     if (userMarker) map.removeLayer(userMarker);
     userMarker = L.circleMarker(userPos, { radius: 9, color: "#ffffff", weight: 3, fillColor: css("--cd-orange"), fillOpacity: 1 }).addTo(map);
-    map.setView(userPos, 14);
-    load(true).then(showNearest);
+    map.setView(userPos, 14, { animate: false });
+    clearTimeout(timer);
+    load(false).then(showNearest);
   }, function () { setStatus(t("geoErr"), true); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
 }
 function showAbout() {
