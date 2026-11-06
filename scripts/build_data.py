@@ -38,7 +38,7 @@ STATEMENTS = [
 
 def query(cc, stmt):
     # One tag per request keeps each query short: the public servers cut requests after ~1-2 minutes.
-    return (f'[out:json][timeout:180];'
+    return (f'[out:json][timeout:400];'
             f'area["ISO3166-1"="{cc}"][admin_level=2]->.a;'
             f'({stmt.format(a="(area.a)")});out center tags;')
 
@@ -51,7 +51,12 @@ def fetch(q):
             try:
                 req = urllib.request.Request(ep, data=body, headers={"User-Agent": "karta-ubezhishta/1.0 (github.com/Dimana200/karta-ubezhishta)"})
                 with urllib.request.urlopen(req, timeout=660) as r:
-                    return json.load(r)
+                    js = json.load(r)
+                # On timeout or memory errors Overpass still answers 200, with an empty result and a "remark".
+                remark = js.get("remark") or ""
+                if re.search(r"error|timed out|out of memory", remark, re.I):
+                    raise RuntimeError("server remark: " + remark[:160])
+                return js
             except Exception as e:  # noqa: BLE001 - retry on any network/server error
                 last = e
                 print(f"   {ep}: {e}", flush=True)
@@ -128,6 +133,13 @@ def main():
             failed.append(cc)
             continue
         recs = dict(records({"elements": elements}))
+        old_file = os.path.join(cdir, cc + ".json")
+        if os.path.exists(old_file):
+            old_n = len(json.load(open(old_file, encoding="utf-8")))
+            if old_n >= 50 and len(recs) < old_n * 0.5:
+                print(f"   SUSPICIOUS {cc}: {len(recs)} now vs {old_n} before, keeping old data", flush=True)
+                failed.append(cc)
+                continue
         with open(os.path.join(cdir, cc + ".json"), "w", encoding="utf-8") as fh:
             json.dump(list(recs.items()), fh, ensure_ascii=False, separators=(",", ":"))
         n = {"s": 0, "m": 0, "b": 0}
