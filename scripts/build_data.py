@@ -97,7 +97,16 @@ def records(js):
 def main():
     """Download each country into data/countries/XX.json, then rebuild all tiles from every
     country file. A country that fails keeps its previous file, so a bad run never empties the map."""
-    only = sys.argv[1:] or COUNTRIES
+    args = sys.argv[1:]
+    fetch_only = "--fetch-only" in args
+    tiles_only = "--tiles-only" in args
+    shard = next((a.split("=", 1)[1] for a in args if a.startswith("--shard=")), None)
+    only = [a for a in args if not a.startswith("--")] or COUNTRIES
+    if shard:
+        k, n = map(int, shard.split("/"))
+        only = only[k::n]
+    if tiles_only:
+        only = []
     cdir = os.path.join(OUT, "countries")
     os.makedirs(cdir, exist_ok=True)
     failed = []
@@ -125,9 +134,21 @@ def main():
         for r in recs.values():
             n[r[2]] += 1
         print(f"   {n}", flush=True)
+    if failed:
+        with open(os.path.join(cdir, "_failed_" + "_".join(failed) + ".txt"), "w") as fh:
+            fh.write(" ".join(failed))
+    if fetch_only:
+        print("fetched; failed:", failed)
+        return
 
+    failed = sorted({c for f in os.listdir(cdir) if f.startswith("_failed_") for c in open(os.path.join(cdir, f)).read().split()})
+    for f in os.listdir(cdir):
+        if f.startswith("_failed_"):
+            os.remove(os.path.join(cdir, f))
     seen, tiles, stats = set(), defaultdict(list), {}
     for f in sorted(os.listdir(cdir)):
+        if not f.endswith(".json"):
+            continue
         cc = f[:-5]
         n = {"s": 0, "m": 0, "b": 0}
         for oid, rec in json.load(open(os.path.join(cdir, f), encoding="utf-8")):

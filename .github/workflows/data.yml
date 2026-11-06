@@ -14,13 +14,44 @@ concurrency:
   group: data
   cancel-in-progress: false
 jobs:
-  build:
+  fetch:
+    # 6 machines in parallel, each downloads every 6th country (the public servers are slow per request)
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 300
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3, 4, 5]
     steps:
       - uses: actions/checkout@v4
       - name: Download from OpenStreetMap
-        run: python3 scripts/build_data.py ${{ github.event.inputs.countries }}
+        run: python3 scripts/build_data.py --fetch-only --shard=${{ matrix.shard }}/6 ${{ github.event.inputs.countries }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: countries-${{ matrix.shard }}
+          path: data/countries/
+          if-no-files-found: ignore
+          retention-days: 3
+  build:
+    needs: fetch
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: countries-*
+          path: new
+          merge-multiple: true
+      - name: Merge new country files over the old ones
+        run: |
+          mkdir -p data/countries
+          if [ -d new ]; then cp -f new/* data/countries/ 2>/dev/null || true; fi
+          ls data/countries | head -80
+      - name: Build map tiles
+        run: python3 scripts/build_data.py --tiles-only
       - name: Commit data
         run: |
           git config user.name "shelter-data-bot"
