@@ -114,6 +114,9 @@ def main():
         only = []
     cdir = os.path.join(OUT, "countries")
     os.makedirs(cdir, exist_ok=True)
+    # Freshly downloaded files also go to fetched/ so the workflow uploads only what this machine downloaded.
+    fdir = os.path.join(OUT, "..", "fetched")
+    os.makedirs(fdir, exist_ok=True)
     failed = []
     for cc in only:
         print(f"{cc} ...", flush=True)
@@ -140,15 +143,17 @@ def main():
                 print(f"   SUSPICIOUS {cc}: {len(recs)} now vs {old_n} before, keeping old data", flush=True)
                 failed.append(cc)
                 continue
-        with open(os.path.join(cdir, cc + ".json"), "w", encoding="utf-8") as fh:
-            json.dump(list(recs.items()), fh, ensure_ascii=False, separators=(",", ":"))
+        for d in (cdir, fdir):
+            with open(os.path.join(d, cc + ".json"), "w", encoding="utf-8") as fh:
+                json.dump(list(recs.items()), fh, ensure_ascii=False, separators=(",", ":"))
         n = {"s": 0, "m": 0, "b": 0}
         for r in recs.values():
             n[r[2]] += 1
         print(f"   {n}", flush=True)
     if failed:
-        with open(os.path.join(cdir, "_failed_" + "_".join(failed) + ".txt"), "w") as fh:
-            fh.write(" ".join(failed))
+        for d in (cdir, fdir):
+            with open(os.path.join(d, "_failed_" + "_".join(failed) + ".txt"), "w") as fh:
+                fh.write(" ".join(failed))
     if fetch_only:
         print("fetched; failed:", failed)
         return

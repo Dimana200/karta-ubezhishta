@@ -30,7 +30,7 @@ jobs:
         if: always()
         with:
           name: countries-${{ matrix.shard }}
-          path: data/countries/
+          path: fetched/
           if-no-files-found: ignore
           retention-days: 3
   build:
