@@ -208,7 +208,7 @@ var T = {
     wMetro: "Подземните станции често се използват за укритие, но не са официално убежище, докато властите не обявят това.",
     wAbandoned: "Обектът е отбелязан като изоставен или разрушен.",
     route: "Маршрут пеша", osm: "Виж в OpenStreetMap", fix: "Поправи / добави на картата",
-    nearTitle: "Най-близки места за укритие", nearNone: "В заредената зона няма убежища или метро. Отдалечете картата и опитайте пак.",
+    nearTitle: "Най-близки места за укритие", nearNone: "В радиус 50 km няма отбелязани убежища или метро. Подходящи укрития са мазета и вътрешни помещения без прозорци.", searching: "Търсим убежища в радиус",
     geoErr: "Не получихме местоположението. Разрешете локацията или преместете картата ръчно.",
     locating: "Търсим местоположението…",
     aboutTitle: "Как да ползвате картата",
@@ -233,7 +233,7 @@ var T = {
     wMetro: "Unterirdische Bahnhöfe dienen oft als Zuflucht, sind aber erst nach behördlicher Freigabe offizielle Schutzorte.",
     wAbandoned: "Als verlassen oder zerstört eingetragen.",
     route: "Fußweg", osm: "In OpenStreetMap ansehen", fix: "Korrigieren / eintragen",
-    nearTitle: "Nächste Zufluchtsorte", nearNone: "Im geladenen Bereich gibt es keine Schutzräume oder U-Bahnhöfe. Karte verkleinern und erneut versuchen.",
+    nearTitle: "Nächste Zufluchtsorte", nearNone: "Im Umkreis von 50 km sind keine Schutzräume oder U-Bahnhöfe eingetragen. Geeignete Zuflucht bieten Keller und innenliegende Räume ohne Fenster.", searching: "Suche Schutzräume im Umkreis von",
     geoErr: "Kein Standort erhalten. Standortfreigabe erlauben oder Karte selbst verschieben.",
     locating: "Standort wird gesucht…",
     aboutTitle: "So nutzen Sie die Karte",
@@ -258,7 +258,7 @@ var T = {
     wMetro: "Underground stations are often used for refuge, but they are not official shelters until the authorities say so.",
     wAbandoned: "Mapped as abandoned or ruined.",
     route: "Walking route", osm: "View in OpenStreetMap", fix: "Fix / add on the map",
-    nearTitle: "Nearest places to take cover", nearNone: "No shelters or metro stations in the loaded area. Zoom out and try again.",
+    nearTitle: "Nearest places to take cover", nearNone: "No shelters or metro stations are mapped within 50 km. Basements and inner rooms without windows are suitable places to take cover.", searching: "Searching for shelters within",
     geoErr: "Could not get your location. Allow location access or move the map yourself.",
     locating: "Finding your location…",
     aboutTitle: "How to use the map",
@@ -316,6 +316,14 @@ function buildQuery(b) {
     'nwr["disused:military"="bunker"](' + bb + ");" +
     'nwr["railway"="station"]["station"="subway"](' + bb + ");" +
     ");out center tags 4000;";
+}
+function nearQuery(lat, lon, r) {
+  var a = "(around:" + r + "," + lat.toFixed(5) + "," + lon.toFixed(5) + ")";
+  return "[out:json][timeout:25];(" +
+    'nwr["amenity"="shelter"]["shelter_type"="bomb_shelter"]' + a + ";" +
+    'nwr["bunker_type"~"^(bomb_shelter|personnel_shelter)$"]' + a + ";" +
+    'nwr["railway"="station"]["station"="subway"]' + a + ";" +
+    ");out center tags 300;";
 }
 function parse(json) {
   var out = [], seen = {};
@@ -443,10 +451,7 @@ function showPlace(p) {
   openSheet(html);
 }
 
-function showNearest() {
-  var cand = items.filter(function (p) { return p.kind !== "bunker"; }).map(function (p) {
-    return { p: p, d: distKm(userPos[0], userPos[1], p.lat, p.lon) };
-  }).sort(function (a, b) { return a.d - b.d; }).slice(0, 6);
+function showNearest(cand) {
   var html = '<div class="sheet-head"><h2>' + esc(t("nearTitle")) + '</h2><button class="close" aria-label="×" data-close>×</button></div>';
   if (!cand.length) html += '<p class="note">' + esc(t("nearNone")) + "</p>";
   else html += '<ul class="near">' + cand.map(function (c, i) {
@@ -463,6 +468,23 @@ function showNearest() {
     });
   });
 }
+var NEAR_RADII = [3000, 15000, 50000];
+function searchNear(step) {
+  var r = NEAR_RADII[step];
+  setStatus(t("searching") + " " + (r / 1000) + " km…");
+  var c = new AbortController();
+  return fetchOverpass(nearQuery(userPos[0], userPos[1], r), 0, c).then(function (json) {
+    var found = parse(json).filter(function (p) { return p.kind !== "bunker"; });
+    if (!found.length && step + 1 < NEAR_RADII.length) return searchNear(step + 1);
+    return found;
+  });
+}
+function mergeItems(list) {
+  var have = {};
+  items.forEach(function (p) { have[p.id] = 1; });
+  list.forEach(function (p) { if (!have[p.id]) { items.push(p); have[p.id] = 1; } });
+  render();
+}
 function locate() {
   if (!navigator.geolocation) { setStatus(t("geoErr"), true); return; }
   setStatus(t("locating"));
@@ -470,9 +492,19 @@ function locate() {
     userPos = [pos.coords.latitude, pos.coords.longitude];
     if (userMarker) map.removeLayer(userMarker);
     userMarker = L.circleMarker(userPos, { radius: 9, color: "#ffffff", weight: 3, fillColor: css("--cd-orange"), fillOpacity: 1 }).addTo(map);
-    map.setView(userPos, 14, { animate: false });
-    clearTimeout(timer);
-    load(false).then(showNearest);
+    searchNear(0).then(function (found) {
+      mergeItems(found);
+      var near = found.map(function (p) { return { p: p, d: distKm(userPos[0], userPos[1], p.lat, p.lon) }; })
+        .sort(function (a, b) { return a.d - b.d; }).slice(0, 6);
+      if (near.length) {
+        var bb = L.latLngBounds([userPos]);
+        near.slice(0, 3).forEach(function (n) { bb.extend([n.p.lat, n.p.lon]); });
+        map.fitBounds(bb.pad(0.2), { maxZoom: 16, animate: false });
+      } else {
+        map.setView(userPos, 13, { animate: false });
+      }
+      showNearest(near);
+    }).catch(function () { setStatus(t("loadErr"), true); });
   }, function () { setStatus(t("geoErr"), true); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 });
 }
 function showAbout() {
