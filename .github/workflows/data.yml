@@ -28,4 +28,8 @@ jobs:
           git add data
           git diff --cached --quiet && echo "no changes" && exit 0
           git commit -m "Update shelter data $(date -u +%F)"
-          git push
+          for i in 1 2 3; do
+            git pull --rebase -X theirs origin main && git push && exit 0
+            sleep 10
+          done
+          exit 1
